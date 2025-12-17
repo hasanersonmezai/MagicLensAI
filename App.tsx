@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ImageUploader from './components/ImageUploader';
 import PresetGrid from './components/PresetGrid';
 import ResultDisplay from './components/ResultDisplay';
@@ -6,12 +6,49 @@ import { generateTransformedImage } from './services/geminiService';
 import { Preset } from './types';
 
 function App() {
+  const [hasApiKey, setHasApiKey] = useState<boolean>(false);
+  const [manualApiKey, setManualApiKey] = useState<string>(""); 
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedPreset, setSelectedPreset] = useState<Preset | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    checkApiKey();
+  }, []);
+
+  const checkApiKey = async () => {
+    if (window.aistudio) {
+      const hasKey = await window.aistudio.hasSelectedApiKey();
+      setHasApiKey(hasKey);
+    } else {
+      // Check if env var exists (for local dev or properly configured builds)
+      if (process.env.API_KEY) {
+        setHasApiKey(true);
+      }
+    }
+  };
+
+  const handleSelectApiKey = async () => {
+    if (window.aistudio) {
+      try {
+        await window.aistudio.openSelectKey();
+        setHasApiKey(true);
+      } catch (e) {
+        console.error("Key selection failed", e);
+      }
+    } else {
+      // Manual entry validation
+      if (manualApiKey.trim().length > 10) {
+        setHasApiKey(true);
+      } else {
+        alert("Lütfen geçerli bir API anahtarı girin (AIza...).");
+      }
+    }
+  };
 
   const handleImageSelected = (file: File, url: string) => {
     setSelectedFile(file);
@@ -38,10 +75,21 @@ function App() {
     setError(null);
 
     try {
-      const generated = await generateTransformedImage(previewUrl, selectedPreset.prompt);
+      // Use manualApiKey if provided, otherwise the service will look for process.env.API_KEY
+      const generated = await generateTransformedImage(previewUrl, selectedPreset.prompt, manualApiKey);
       setResultImage(generated);
     } catch (err: any) {
       console.error(err);
+      
+      // If error suggests missing key, reset to key entry screen
+      if (err.message && (err.message.includes("API Anahtarı bulunamadı") || err.message.includes("403"))) {
+         if (!process.env.API_KEY && !manualApiKey) {
+            setHasApiKey(false);
+         }
+         setError("API Hatası: Anahtarınız yetkisiz veya eksik. Lütfen geçerli bir anahtar girdiğinizden emin olun.");
+         return;
+      }
+
       setError(err.message || "Bir hata oluştu. Lütfen tekrar deneyin.");
     } finally {
       setIsProcessing(false);
@@ -59,6 +107,69 @@ function App() {
     }
   };
 
+  // -------------------------------------------------------------------------
+  // API Key Entry Screen
+  // -------------------------------------------------------------------------
+  if (!hasApiKey) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center p-4 font-sans">
+        <div className="max-w-lg w-full bg-slate-800 border border-slate-700 rounded-2xl p-8 text-center shadow-2xl">
+          <div className="w-16 h-16 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-indigo-400">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-3">Hoşgeldiniz</h2>
+          
+          <div className="text-slate-400 mb-6 space-y-4">
+            <p>
+              Uygulamayı kullanmak için Google AI Studio'dan (Gemini) aldığınız API anahtarını giriniz.
+            </p>
+            
+            {/* Show manual input if not in aistudio environment */}
+            {!window.aistudio ? (
+              <div className="space-y-4 text-left">
+                <label className="block text-sm font-medium text-slate-300">
+                  API Anahtarınızı Yapıştırın:
+                </label>
+                <input 
+                  type="password" 
+                  value={manualApiKey}
+                  onChange={(e) => setManualApiKey(e.target.value)}
+                  placeholder="AIzaSy..."
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-sm"
+                />
+                <p className="text-xs text-slate-500">
+                  Anahtarınız sadece tarayıcınızda geçici olarak kullanılır.
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-300">
+                Google IDX ortamındasınız, aşağıdaki butonu kullanabilirsiniz.
+              </p>
+            )}
+          </div>
+
+          <button 
+            onClick={handleSelectApiKey}
+            className="w-full py-3.5 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/20 transition-all mb-4"
+          >
+            {window.aistudio ? "API Anahtarı Seç" : "Anahtarı Kaydet ve Başla"}
+          </button>
+          
+          <div className="text-xs text-slate-500 border-t border-slate-700 pt-4">
+             <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline">
+                API Anahtarı Alın
+              </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Main App UI
+  // -------------------------------------------------------------------------
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans selection:bg-indigo-500/30">
       {/* Navbar */}
@@ -77,8 +188,19 @@ function App() {
               MagicLens AI
             </span>
           </div>
-          <div className="text-sm text-slate-400 hidden sm:block">
-            Gemini 2.5 Flash tarafından desteklenmektedir
+          <div className="flex items-center gap-4">
+             <button 
+               onClick={() => {
+                 setHasApiKey(false);
+                 setManualApiKey("");
+               }}
+               className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+             >
+               Anahtarı Değiştir
+             </button>
+            <div className="text-sm text-slate-400 hidden sm:block">
+              Gemini 3 Pro
+            </div>
           </div>
         </div>
       </header>
@@ -198,7 +320,7 @@ function App() {
             </div>
             <h3 className="text-xl font-bold text-white">Sihir Yapılıyor...</h3>
             <p className="text-slate-400 text-center text-sm">
-              Yapay zeka fotoğrafınızı işliyor. Bu işlem genellikle 5-10 saniye sürer.
+              Yapay zeka fotoğrafınızı işliyor. Bu işlem genellikle 15-20 saniye sürer.
             </p>
           </div>
         </div>

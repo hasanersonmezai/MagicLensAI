@@ -1,32 +1,40 @@
 import { GoogleGenAI } from "@google/genai";
 
-const apiKey = process.env.API_KEY;
-
-if (!apiKey) {
-  console.error("API_KEY is missing from environment variables");
-}
-
-const ai = new GoogleGenAI({ apiKey: apiKey || '' });
-
 /**
  * Generates/Edits an image based on an input image and a text prompt.
- * Uses gemini-2.5-flash-image which is efficient for these tasks.
+ * Uses gemini-3-pro-image-preview for high quality.
+ * 
+ * @param base64Image The input image in base64 format.
+ * @param prompt The prompt to apply.
+ * @param customApiKey (Optional) Manually provided API key.
  */
 export const generateTransformedImage = async (
   base64Image: string,
-  prompt: string
+  prompt: string,
+  customApiKey?: string
 ): Promise<string> => {
   try {
+    // Determine the API key: either passed explicitly or from environment
+    const apiKey = customApiKey || process.env.API_KEY;
+
+    if (!apiKey) {
+      throw new Error("API Anahtarı bulunamadı. Lütfen ayarlardan anahtarınızı girin.");
+    }
+
+    // Instantiate the client dynamically with the specific key
+    // This prevents "process.env.API_KEY missing" errors at startup time
+    const ai = new GoogleGenAI({ apiKey });
+
     // Remove data:image/xxx;base64, prefix if present
     const cleanBase64 = base64Image.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
     
-    // Determine mimeType (simple check, default to image/jpeg if unsure)
+    // Determine mimeType
     let mimeType = 'image/jpeg';
     if (base64Image.startsWith('data:image/png')) mimeType = 'image/png';
     else if (base64Image.startsWith('data:image/webp')) mimeType = 'image/webp';
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image', // Recommended model for general image editing tasks
+      model: 'gemini-3-pro-image-preview', 
       contents: {
         parts: [
           {
@@ -40,9 +48,12 @@ export const generateTransformedImage = async (
           },
         ],
       },
-      // Note: No responseMimeType needed for this model usually, 
-      // but if we were using Imagen we would use generateImages.
-      // For 2.5 flash image, it returns parts with inlineData.
+      config: {
+        imageConfig: {
+          imageSize: "1K",
+          aspectRatio: "1:1"
+        }
+      }
     });
 
     if (!response.candidates || response.candidates.length === 0) {
@@ -64,7 +75,7 @@ export const generateTransformedImage = async (
     }
 
     if (!generatedBase64) {
-      throw new Error("Model generated a response but no image data was found. It might have refused the request.");
+      throw new Error("Model generated a response but no image data was found.");
     }
 
     return `data:image/png;base64,${generatedBase64}`;

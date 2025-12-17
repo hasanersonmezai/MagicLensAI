@@ -89,6 +89,12 @@ function App() {
          setError("API Hatası: Anahtarınız yetkisiz veya eksik. Lütfen geçerli bir anahtar girdiğinizden emin olun.");
          return;
       }
+      
+      // Handle Quota errors nicely
+      if (err.message && err.message.includes("429")) {
+        setError("Kota sınırı aşıldı. Lütfen birkaç saniye bekleyip tekrar deneyin.");
+        return;
+      }
 
       setError(err.message || "Bir hata oluştu. Lütfen tekrar deneyin.");
     } finally {
@@ -199,7 +205,7 @@ function App() {
                Anahtarı Değiştir
              </button>
             <div className="text-sm text-slate-400 hidden sm:block">
-              Gemini 3 Pro
+              Gemini 2.5 Flash
             </div>
           </div>
         </div>

@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 
 /**
  * Generates/Edits an image based on an input image and a text prompt.
- * Uses gemini-3-pro-image-preview for high quality.
+ * Uses gemini-2.5-flash-image for better quota handling and speed.
  * 
  * @param base64Image The input image in base64 format.
  * @param prompt The prompt to apply.
@@ -34,7 +34,7 @@ export const generateTransformedImage = async (
     else if (base64Image.startsWith('data:image/webp')) mimeType = 'image/webp';
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview', 
+      model: 'gemini-2.5-flash-image', 
       contents: {
         parts: [
           {
@@ -50,7 +50,7 @@ export const generateTransformedImage = async (
       },
       config: {
         imageConfig: {
-          imageSize: "1K",
+          // Image size is not supported in Flash Image model, only aspect ratio
           aspectRatio: "1:1"
         }
       }

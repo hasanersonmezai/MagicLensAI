@@ -1,0 +1,7 @@
+{
+  "name": "MagicLens AI",
+  "description": "Transform your photos into various styles including professional LinkedIn headshots, Ghibli/Pixar characters, and age progressions using Gemini AI.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
